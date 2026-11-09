@@ -1,7 +1,10 @@
+import { ALPHABET } from './constants.js';
 import type { Base } from './types.js';
 
 export const createDigitValidator = (
-  _base: Base,
+  base: Base,
 ): ((char: string) => boolean) => {
-  throw new Error('Not implemented');
+  const digits = ALPHABET.slice(0, base);
+
+  return (char) => char.length === 1 && digits.includes(char.toLowerCase());
 };
