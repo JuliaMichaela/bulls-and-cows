@@ -1,17 +1,47 @@
-import type { GameSettings, GameState } from '../core/types.js';
+import { evaluateGuess } from '../core/evaluation.js';
+import { isValidGuess } from '../core/guess.js';
+import type { GameSettings, GameState, HistoryEntry } from '../core/types.js';
 
 export const startGame = (
-  _settings: GameSettings,
-  _secret: string,
-  _now: number,
-): GameState => {
-  throw new Error('Not implemented');
-};
+  settings: GameSettings,
+  secret: string,
+  now: number,
+): GameState => ({
+  settings: { ...settings },
+  secret: secret.toLowerCase(),
+  history: [],
+  status: 'playing',
+  startedAt: now,
+  finishedAt: null,
+});
 
 export const submitGuess = (
-  _state: GameState,
-  _guess: string,
-  _now: number,
+  state: GameState,
+  guess: string,
+  now: number,
 ): GameState => {
-  throw new Error('Not implemented');
+  const { settings, secret, history } = state;
+
+  if (state.status !== 'playing') {
+    return state;
+  }
+  if (!isValidGuess(guess, settings.length, settings.base)) {
+    return state;
+  }
+
+  const normalized = guess.toLowerCase();
+  if (history.some((item) => item.guess.toLowerCase() === normalized)) {
+    return state;
+  }
+
+  const result = evaluateGuess(secret, normalized);
+  const entry: HistoryEntry = { guess: normalized, ...result };
+  const isWon = result.bulls === settings.length;
+
+  return {
+    ...state,
+    history: [...history, entry],
+    status: isWon ? 'won' : 'playing',
+    finishedAt: isWon ? now : null,
+  };
 };
