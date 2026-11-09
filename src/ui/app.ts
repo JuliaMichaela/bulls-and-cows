@@ -1,8 +1,9 @@
-import { BASE_LABELS } from '../core/constants.js';
+import { isValidGuess } from '../core/guess.js';
 import { generateSecret } from '../core/secret.js';
 import type { GameSettings, GameState } from '../core/types.js';
-import { startGame } from '../game/state.js';
+import { startGame, submitGuess } from '../game/state.js';
 import { createElement } from './dom.js';
+import { createGameScreen, type GuessOutcome } from './game-screen.js';
 import { createSettingsScreen } from './settings-screen.js';
 
 const RULES =
@@ -10,28 +11,47 @@ const RULES =
   'guess you get bulls (right digit in the right place) and cows (right ' +
   'digit in the wrong place). Find the number in as few attempts as you can.';
 
-/** Shows only the chosen settings: the secret never reaches the DOM. */
-const createRoundScreen = (settings: GameSettings): HTMLElement =>
-  createElement(
-    'section',
-    { className: 'round' },
-    createElement('h2', { text: 'Round started' }),
-    createElement('p', {
-      text: `Numeral system: ${BASE_LABELS[settings.base]} (base ${settings.base})`,
-    }),
-    createElement('p', { text: `Secret length: ${settings.length} digits` }),
-    createElement('p', {
-      text: 'The secret number has been chosen. Settings are locked for this round.',
-    }),
-  );
-
 export const mountApp = (container: HTMLElement): void => {
   const screen = createElement('div', { className: 'screen' });
   let state: GameState | undefined;
 
+  // The screen reports guesses through this callback; the secret and the
+  // game state never leave this closure.
+  const handleGuess = (guess: string): GuessOutcome => {
+    const current = state;
+    if (current === undefined) {
+      return { kind: 'rejected', reason: 'finished' };
+    }
+
+    const next = submitGuess(current, guess, Date.now());
+    if (next === current) {
+      const { length, base } = current.settings;
+      if (current.status !== 'playing') {
+        return { kind: 'rejected', reason: 'finished' };
+      }
+      return {
+        kind: 'rejected',
+        reason: isValidGuess(guess, length, base) ? 'duplicate' : 'invalid',
+      };
+    }
+
+    const entry = next.history.at(-1);
+    if (entry === undefined) {
+      return { kind: 'rejected', reason: 'invalid' };
+    }
+
+    state = next;
+    return {
+      kind: 'accepted',
+      entry,
+      attempts: next.history.length,
+      won: next.status === 'won',
+    };
+  };
+
   const showRound = (): void => {
     if (state !== undefined) {
-      screen.replaceChildren(createRoundScreen(state.settings));
+      screen.replaceChildren(createGameScreen(state.settings, handleGuess));
     }
   };
 
