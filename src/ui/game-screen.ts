@@ -2,6 +2,9 @@ import { BASE_LABELS } from '../core/constants.js';
 import { createDigitValidator } from '../core/digits.js';
 import type { GameSettings, HistoryEntry } from '../core/types.js';
 import { createElement } from './dom.js';
+import { formatDuration, startTicker } from './timer.js';
+
+const TICK_MS = 250;
 
 export type RejectionReason = 'invalid' | 'duplicate' | 'finished';
 
@@ -12,8 +15,24 @@ export type GuessOutcome =
       readonly kind: 'accepted';
       readonly entry: HistoryEntry;
       readonly attempts: number;
-      readonly won: boolean;
+      /** Set only when this guess won the round: finishedAt - startedAt. */
+      readonly durationMs: number | null;
     };
+
+export interface GameScreenOptions {
+  readonly settings: GameSettings;
+  /** Epoch milliseconds of the round start; the shown time derives from it. */
+  readonly startedAt: number;
+  readonly now: () => number;
+  readonly onGuess: (guess: string) => GuessOutcome;
+  readonly onNewGame: () => void;
+}
+
+export interface GameScreen {
+  readonly element: HTMLElement;
+  /** Stops the timer. Must be called when the screen is left. */
+  readonly dispose: () => void;
+}
 
 const count = (amount: number, word: string): string =>
   `${amount} ${word}${amount === 1 ? '' : 's'}`;
@@ -73,10 +92,13 @@ const createHistoryTable = (): {
  * The round screen. It only knows the settings and a callback: the secret
  * stays inside the app, so it can never leak into the DOM from here.
  */
-export const createGameScreen = (
-  settings: GameSettings,
-  onGuess: (guess: string) => GuessOutcome,
-): HTMLElement => {
+export const createGameScreen = ({
+  settings,
+  startedAt,
+  now,
+  onGuess,
+  onNewGame,
+}: GameScreenOptions): GameScreen => {
   const isDigit = createDigitValidator(settings.base);
   const keepDigits = (text: string): string =>
     [...text].filter(isDigit).join('');
@@ -105,6 +127,23 @@ export const createGameScreen = (
     text: 'Attempts: 0',
   });
   const history = createHistoryTable();
+
+  const timerValue = createElement('span', { text: formatDuration(0) });
+  const timer = createElement(
+    'p',
+    { className: 'timer', text: 'Time: ' },
+    timerValue,
+  );
+
+  const newGameButton = createElement('button', { text: 'New game' });
+  newGameButton.type = 'button';
+  newGameButton.addEventListener('click', onNewGame);
+
+  // Only the text of the timer is updated; the form and the history stay.
+  let finished = false;
+  const stopTicker = startTicker(() => {
+    timerValue.textContent = formatDuration(now() - startedAt);
+  }, TICK_MS);
 
   // Drop every character that is not a digit of the chosen base, including
   // pasted text, and keep the caret next to the characters that stayed.
@@ -155,10 +194,15 @@ export const createGameScreen = (
     history.table.hidden = false;
     attemptsCounter.textContent = `Attempts: ${outcome.attempts}`;
 
-    if (outcome.won) {
+    if (outcome.durationMs !== null) {
+      finished = true;
+      stopTicker();
+      timerValue.textContent = formatDuration(outcome.durationMs);
       input.disabled = true;
       button.disabled = true;
-      message.textContent = `You guessed it in ${count(outcome.attempts, 'attempt')}!`;
+      message.textContent =
+        `You guessed it in ${count(outcome.attempts, 'attempt')} ` +
+        `and ${formatDuration(outcome.durationMs)}!`;
       return;
     }
 
@@ -178,6 +222,9 @@ export const createGameScreen = (
 
   form.addEventListener('submit', (event) => {
     event.preventDefault();
+    if (finished) {
+      return;
+    }
     const outcome = onGuess(input.value);
 
     if (outcome.kind === 'accepted') {
@@ -188,7 +235,7 @@ export const createGameScreen = (
     input.focus();
   });
 
-  return createElement(
+  const element = createElement(
     'section',
     { className: 'round' },
     createElement('h2', { text: 'Round in progress' }),
@@ -196,9 +243,13 @@ export const createGameScreen = (
       text: `Numeral system: ${BASE_LABELS[settings.base]} (base ${settings.base})`,
     }),
     createElement('p', { text: `Secret length: ${settings.length} digits` }),
+    timer,
     form,
     message,
     attemptsCounter,
     history.table,
+    newGameButton,
   );
+
+  return { element, dispose: stopTicker };
 };
