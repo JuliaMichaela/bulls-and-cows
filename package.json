@@ -4,6 +4,9 @@
   "description": "Bulls and Cows game",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "^22.13.0 || ^24.0.0 || >=26.0.0"
+  },
   "scripts": {
     "lint": "eslint .",
     "format": "prettier --write .",
@@ -12,6 +15,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.build.json",
+    "build:site": "npm run build && node scripts/prepare-site.mjs",
     "prepare": "husky"
   },
   "repository": {

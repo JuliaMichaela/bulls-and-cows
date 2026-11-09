@@ -65,9 +65,11 @@ tried is not added to the history; a message explains why.
 ## Requirements
 
 - Node.js **22.13 or newer 22.x, any 24.x, or 26 and newer**, and npm. This is
-  the intersection of the `engines` fields of the development dependencies
-  (ESLint 10 and Vitest 5). The project was developed with Node.js 24.6.0 and
-  npm 11.5.1. `package.json` itself does not declare an `engines` field.
+  the `engines` field of `package.json` (`^22.13.0 || ^24.0.0 || >=26.0.0`),
+  derived from the requirements of the development dependencies (ESLint 10 and
+  Vitest 5). npm only warns about an unsupported version unless
+  `engine-strict` is enabled. The project was developed with Node.js 24.6.0 and
+  npm 11.5.1; the hosting configuration pins Node.js 24.
 - Git, because the Git hooks are installed by Husky (see below).
 - A modern browser with support for ES modules. Node.js is needed only to
   install, check and build; the built game is static files.
@@ -83,34 +85,35 @@ runs the `prepare` script, which installs the Git hooks.
 
 The TypeScript sources are compiled by plain `tsc` (no bundler) into ES modules
 in `dist/`, and `index.html` loads `./dist/main.js`. To run the game locally,
-build it and serve the project folder with any static file server:
+assemble the site and serve the `out/` folder with any static file server:
 
 ```bash
-npm run build
-python3 -m http.server 8080
+npm run build:site
+python3 -m http.server 8080 --directory out
 ```
 
 Then open <http://localhost:8080/>. Python is used here only as an example of a
 static server; it is not a project dependency. Open the page through HTTP:
 browsers normally refuse to load ES modules from `file://` addresses. After you
-change the code, run `npm run build` again.
+change the code, run `npm run build:site` again.
 
 ## npm scripts
 
-| Command                | What it does                                                  |
-| ---------------------- | ------------------------------------------------------------- |
-| `npm run build`        | Compiles `src/` to `dist/` with `tsc -p tsconfig.build.json`. |
-| `npm test`             | Runs the unit tests once (`vitest run --passWithNoTests`).    |
-| `npm run test:watch`   | Runs the tests in watch mode.                                 |
-| `npm run lint`         | Runs ESLint on the whole project.                             |
-| `npm run format:check` | Checks the formatting with Prettier.                          |
-| `npm run format`       | Formats the files with Prettier (it changes files).           |
-| `npm run typecheck`    | Type-checks everything, including the tests (`tsc --noEmit`). |
+| Command                | What it does                                                                                        |
+| ---------------------- | --------------------------------------------------------------------------------------------------- |
+| `npm run build`        | Compiles `src/` to `dist/` with `tsc -p tsconfig.build.json`.                                       |
+| `npm run build:site`   | Runs `npm run build`, then assembles the publishable site in `out/` (see "Preparing a deployment"). |
+| `npm test`             | Runs the unit tests once (`vitest run --passWithNoTests`).                                          |
+| `npm run test:watch`   | Runs the tests in watch mode.                                                                       |
+| `npm run lint`         | Runs ESLint on the whole project.                                                                   |
+| `npm run format:check` | Checks the formatting of all files, including the Markdown files, with Prettier.                    |
+| `npm run format`       | Formats the files with Prettier (it changes files).                                                 |
+| `npm run typecheck`    | Type-checks everything under `src/`, including the tests (`tsc --noEmit`).                          |
 
 To run all checks before a commit:
 
 ```bash
-npm run lint && npm run format:check && npm run typecheck && npm test && npm run build
+npm run lint && npm run format:check && npm run typecheck && npm test && npm run build:site
 ```
 
 ## Git hooks
@@ -144,32 +147,51 @@ dist/...        (the output of npm run build)
 paths (and the compiled modules import each other by relative paths too), so
 the site does not depend on being served from the root of a domain.
 
-`dist/` is listed in `.gitignore`, so it is not in the repository and must be
-built on the hosting side (or locally before an upload). The folders `src/`,
-`node_modules/` and the configuration files are not needed in the published
-site. The build command copies exactly what is needed into the folder `out/`,
-which is also ignored by Git:
+`dist/` is listed in `.gitignore`, so it is not in the repository and has to be
+built on the hosting side (or locally before an upload).
+
+### Assembling the site
 
 ```bash
-npm run build && mkdir -p out && cp -r index.html styles dist out/
+npm run build:site
 ```
 
-Settings for a static host that builds the site from the repository (for
-example Netlify):
+This compiles the sources (`npm run build`) and then runs
+[`scripts/prepare-site.mjs`](scripts/prepare-site.mjs), which creates the folder
+`out/` with a copy of `index.html`, `styles/` and `dist/`. The script uses only
+built-in Node.js modules and works the same on every operating system. It first
+checks that the three inputs exist, then deletes `out/` (only that folder) and
+creates it again. `out/` is ignored by Git. Source files, tests,
+`node_modules/` and configuration files are not copied.
 
-| Setting           | Value                                                                |
-| ----------------- | -------------------------------------------------------------------- |
-| Build command     | `npm run build && mkdir -p out && cp -r index.html styles dist out/` |
-| Publish directory | `out`                                                                |
-| Node.js version   | a supported version (see [Requirements](#requirements))              |
+`dist/` is not cleaned by the script: `tsc` overwrites the files it produces but
+does not remove files left from deleted modules. On a fresh checkout (as on a
+hosting platform) this does not matter; locally, delete `dist/` first if you
+removed a source file.
 
-The dependencies must be installed before the build command runs (the
-equivalent of `npm ci`).
+### Netlify
+
+[`netlify.toml`](netlify.toml) holds the settings, so they do not have to be
+entered by hand:
+
+```toml
+[build]
+  command = "npm run build:site"
+  publish = "out"
+
+[build.environment]
+  NODE_VERSION = "24"
+```
+
+- The build command is `npm run build:site` and the published directory is
+  `out`.
+- The build uses Node.js 24, which is inside the supported range of `engines`.
+- Netlify installs the dependencies from `package-lock.json` before the build.
+- The configuration file is read from the branch that is deployed, so deploy
+  the branch that contains `netlify.toml`.
 
 Notes:
 
-- The repository has no configuration file for a hosting service. The values
-  above have to be entered in the service's settings.
 - The compiled files have source maps (`dist/**/*.js.map`) that refer to
   `../src/*.ts`. These files are not published, so the browser's developer tools
   cannot show the original sources; the game itself does not use the maps.

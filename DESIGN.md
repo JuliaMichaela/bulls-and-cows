@@ -18,6 +18,8 @@ in the repository; file names are links to the code.
 ```text
 index.html            empty <body> except the <script type="module">
 styles/main.css       all styles
+scripts/              prepare-site.mjs: assembles the publishable site into out/
+netlify.toml          hosting settings (build command, published folder, Node version)
 src/
   main.ts             entry point: mounts the app into document.body
   core/               pure game rules, no DOM
