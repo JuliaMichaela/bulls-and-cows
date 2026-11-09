@@ -1,7 +1,8 @@
 import { BASE_LABELS } from '../core/constants.js';
 import { createDigitValidator } from '../core/digits.js';
-import type { GameSettings, HistoryEntry } from '../core/types.js';
+import type { GameSettings, HistoryEntry, ScoreRecord } from '../core/types.js';
 import { createElement } from './dom.js';
+import { createRecordsView } from './records-view.js';
 import { formatDuration, startTicker } from './timer.js';
 
 const TICK_MS = 250;
@@ -17,6 +18,8 @@ export type GuessOutcome =
       readonly attempts: number;
       /** Set only when this guess won the round: finishedAt - startedAt. */
       readonly durationMs: number | null;
+      /** The records table after this guess; set only when it won the round. */
+      readonly records: readonly ScoreRecord[] | null;
     };
 
 export interface GameScreenOptions {
@@ -32,6 +35,8 @@ export interface GameScreen {
   readonly element: HTMLElement;
   /** Stops the timer. Must be called when the screen is left. */
   readonly dispose: () => void;
+  /** Puts the cursor into the guess field once the screen is in the page. */
+  readonly focus: () => void;
 }
 
 const count = (amount: number, word: string): string =>
@@ -110,7 +115,6 @@ export const createGameScreen = ({
   input.autocomplete = 'off';
   input.autocapitalize = 'off';
   input.spellcheck = false;
-  input.autofocus = true;
   input.inputMode = settings.base <= 10 ? 'numeric' : 'text';
 
   const label = createElement('label', { text: 'Your guess' });
@@ -134,6 +138,9 @@ export const createGameScreen = ({
     { className: 'timer', text: 'Time: ' },
     timerValue,
   );
+
+  const leaderboard = createRecordsView();
+  leaderboard.element.hidden = true;
 
   const newGameButton = createElement('button', { text: 'New game' });
   newGameButton.type = 'button';
@@ -198,6 +205,10 @@ export const createGameScreen = ({
       finished = true;
       stopTicker();
       timerValue.textContent = formatDuration(outcome.durationMs);
+      if (outcome.records !== null) {
+        leaderboard.update(outcome.records, settings);
+        leaderboard.element.hidden = false;
+      }
       input.disabled = true;
       button.disabled = true;
       message.textContent =
@@ -248,8 +259,9 @@ export const createGameScreen = ({
     message,
     attemptsCounter,
     history.table,
+    leaderboard.element,
     newGameButton,
   );
 
-  return { element, dispose: stopTicker };
+  return { element, dispose: stopTicker, focus: () => input.focus() };
 };

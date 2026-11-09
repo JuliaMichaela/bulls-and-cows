@@ -38,6 +38,7 @@ const createField = (
  */
 export const createSettingsScreen = (
   onStart: (settings: GameSettings) => void,
+  onChange: (settings: GameSettings) => void,
 ): HTMLFormElement => {
   let settings = DEFAULT_SETTINGS;
 
@@ -74,6 +75,7 @@ export const createSettingsScreen = (
       settings.length,
       settings.base,
     )}`;
+    onChange(settings);
   };
 
   baseSelect.addEventListener('change', () => {
