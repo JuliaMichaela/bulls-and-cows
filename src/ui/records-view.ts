@@ -38,6 +38,10 @@ export const createRecordsView = (): RecordsView => {
   const table = createElement(
     'table',
     { className: 'records' },
+    createElement('caption', {
+      className: 'visually-hidden',
+      text: 'Best results',
+    }),
     createElement('thead', {}, createElement('tr', {}, ...headers)),
     body,
   );

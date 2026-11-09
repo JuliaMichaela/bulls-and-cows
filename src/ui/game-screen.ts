@@ -85,6 +85,10 @@ const createHistoryTable = (): {
   const table = createElement(
     'table',
     { className: 'history' },
+    createElement('caption', {
+      className: 'visually-hidden',
+      text: 'Your attempts',
+    }),
     createElement('thead', {}, createElement('tr', {}, ...headers)),
     body,
   );
@@ -124,7 +128,14 @@ export const createGameScreen = ({
   button.type = 'submit';
 
   const message = createElement('p', { className: 'message' });
-  message.setAttribute('aria-live', 'polite');
+  message.setAttribute('role', 'status');
+  const showMessage = (
+    text: string,
+    kind: 'info' | 'error' | 'success',
+  ): void => {
+    message.className = `message message--${kind}`;
+    message.textContent = text;
+  };
 
   const attemptsCounter = createElement('p', {
     className: 'attempts',
@@ -211,15 +222,19 @@ export const createGameScreen = ({
       }
       input.disabled = true;
       button.disabled = true;
-      message.textContent =
+      showMessage(
         `You guessed it in ${count(outcome.attempts, 'attempt')} ` +
-        `and ${formatDuration(outcome.durationMs)}!`;
+          `and ${formatDuration(outcome.durationMs)}!`,
+        'success',
+      );
       return;
     }
 
-    message.textContent =
+    showMessage(
       `Guess accepted: ${count(outcome.entry.bulls, 'bull')}, ` +
-      `${count(outcome.entry.cows, 'cow')}.`;
+        `${count(outcome.entry.cows, 'cow')}.`,
+      'info',
+    );
     input.value = '';
     input.focus();
   };
@@ -242,7 +257,7 @@ export const createGameScreen = ({
       showAccepted(outcome);
       return;
     }
-    message.textContent = rejectionMessage(outcome.reason, settings);
+    showMessage(rejectionMessage(outcome.reason, settings), 'error');
     input.focus();
   });
 
@@ -251,9 +266,13 @@ export const createGameScreen = ({
     { className: 'round' },
     createElement('h2', { text: 'Round in progress' }),
     createElement('p', {
+      className: 'round-info',
       text: `Numeral system: ${BASE_LABELS[settings.base]} (base ${settings.base})`,
     }),
-    createElement('p', { text: `Secret length: ${settings.length} digits` }),
+    createElement('p', {
+      className: 'round-info',
+      text: `Secret length: ${settings.length} digits`,
+    }),
     timer,
     form,
     message,
